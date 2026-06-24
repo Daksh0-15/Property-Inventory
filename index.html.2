@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Property Inventory – Ayodhya</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:#f7f4ee;color:#2b2620}
+::-webkit-scrollbar{height:6px;width:6px}
+::-webkit-scrollbar-thumb{background:#d4cdbf;border-radius:4px}
+.pi-card{transition:box-shadow .18s,transform .18s}
+.pi-card:hover{box-shadow:0 6px 22px rgba(60,50,30,.1);transform:translateY(-2px)}
+.pi-btn{transition:all .15s;cursor:pointer;font-family:'Inter',sans-serif}
+.pi-btn:hover{filter:brightness(.94)}
+.pi-btn:active{transform:scale(.97)}
+.chip{transition:all .15s;cursor:pointer;font-family:'Inter',sans-serif}
+select,input,textarea{font-family:'Inter',sans-serif}
+::placeholder{color:#b8b0a2}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+const STORAGE_KEY = 'ayodhya-prop-v1';
+
+const TYPE_CONFIG = {
+  House:      { emoji:'🏠', color:'#2d5f4f', bg:'#e8f2ee' },
+  Shop:       { emoji:'🏪', color:'#8a4a2e', bg:'#f5e8e0' },
+  Hotel:      { emoji:'🏨', color:'#5a4a8a', bg:'#ece6f5' },
+  Commercial: { emoji:'🏢', color:'#9a6b00', bg:'#fbf0d9' },
+};
+
+const STATUS_CONFIG = {
+  'Available':          { color:'#2d5f4f', bg:'#e8f2ee',  label:'Available' },
+  'Rented':             { color:'#7a7a7a', bg:'#ececec',  label:'Rented Out' },
+  'Charges Available':  { color:'#9a6b00', bg:'#fbf0d9',  label:'Charges Available' },
+};
+
+const SAMPLE = [
+  {id:'p1',type:'House',title:'2 BHK Fully Furnished Nice Home',location:'Lalbagh, Ayodhya',rent:13000,deposit:0,area:'',contact:'8604518303',contactName:'',status:'Charges Available',notes:'AC, Inverter on 1st Floor. Charges available 25%',media:[]},
+  {id:'p2',type:'House',title:'3 BHK with Car Parking, Boundary Wall & Gate',location:'13, Laxamapuri Colony, Amaniganj',rent:12000,deposit:0,area:'',contact:'9415155xxx',contactName:'Manik Sinha',status:'Available',notes:'AC fitted, furnished. Excludes electricity. 24hrs water supply.',media:[]},
+  {id:'p3',type:'Shop',title:'Shop for Rent at HanumanGarhi',location:'HanumanGarhi, Ayodhya',rent:30000,deposit:0,area:'',contact:'8604229425',contactName:'',status:'Available',notes:'Without any security',media:[]},
+  {id:'p4',type:'Shop',title:'Shop at Rikabganj',location:'Rikabganj, Ayodhya',rent:22000,deposit:300000,area:'10×20.6 sq ft',contact:'8687927709',contactName:'',status:'Available',notes:'Reference Dharmendra. Pagdi 3 lacs.',media:[]},
+  {id:'p5',type:'Hotel',title:'14 Rooms Guest House',location:'Close to Mamta Lawn',rent:140000,deposit:0,area:'',contact:'',contactName:'Pappuji',status:'Available',notes:'1.4 Lacs rent',media:[]},
+  {id:'p6',type:'Commercial',title:'Furnished Commercial Space GF 2500 + Lower GF 800 Sq Ft',location:'Sahebganj, Rampath (Kalashark Complex)',rent:125000,deposit:0,area:'3300 sq ft total',contact:'09336627910',contactName:'Avneesh Gupta',status:'Available',notes:'1 to 1.5 lacs negotiable',media:[]},
+  {id:'p7',type:'House',title:'Fully Furnished Home: 2BHK on 1st & 2nd floor',location:'Vaidehi Nagar, Behind Sahabganj Police Chauki',rent:14000,deposit:0,area:'',contact:'9839275020',contactName:'',status:'Rented',notes:'OLX, Charges Available',media:[]},
+  {id:'p8',type:'Commercial',title:'Plot on Lease – 6600 sq ft, 3300 sq ft constructed',location:'From DM house to Krishna Palace',rent:60000,deposit:0,area:'6600 sq ft / 3300 built',contact:'7905337728',contactName:'Ayush Singh',status:'Available',notes:'6 room, 1 haal, 4 washroom, 1 kitchen',media:[]},
+];
+
+function loadData() {
+  try { const d = localStorage.getItem(STORAGE_KEY); if(d) return JSON.parse(d); } catch(e){}
+  return SAMPLE;
+}
+function saveData(d) { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch(e){} }
+
+function fmtRent(v) {
+  if(!v||v===0) return '—';
+  if(v>=100000){const l=v/100000;return `₹${l%1===0?l.toFixed(0):l.toFixed(2)}L`;}
+  if(v>=1000) return `₹${(v/1000).toFixed(v%1000===0?0:1)}K`;
+  return `₹${v}`;
+}
+
+const newEntry = () => ({id:'p'+Date.now()+Math.random().toString(36).slice(2,5),type:'House',title:'',location:'',rent:'',deposit:'',area:'',contact:'',contactName:'',status:'Available',notes:'',media:[]});
+
+function readFile(file) {
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res({id:Date.now()+Math.random().toString(36).slice(2,5),type:file.type.startsWith('video')?'video':'image',url:r.result,name:file.name});
+    r.onerror=rej;
+    r.readAsDataURL(file);
+  });
+}
+
+// Lightbox
+function Lightbox({media,startIdx,onClose}) {
+  const [idx,setIdx] = useState(startIdx);
+  const item = media[idx];
+  const prev = ()=>setIdx(i=>(i-1+media.length)%media.length);
+  const next = ()=>setIdx(i=>(i+1)%media.length);
+  useEffect(()=>{
+    const h=e=>{if(e.key==='Escape')onClose();if(e.key==='ArrowLeft')prev();if(e.key==='ArrowRight')next();};
+    window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);
+  },[]);
+  if(!item) return null;
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(10,8,6,.9)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div onClick={e=>e.stopPropagation()} style={{position:'relative',maxWidth:900,width:'92vw',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
+        <button onClick={onClose} style={{position:'absolute',top:-40,right:0,background:'rgba(255,255,255,.15)',border:'none',color:'#fff',borderRadius:8,padding:'6px 12px',cursor:'pointer',fontSize:18}}>✕</button>
+        {media.length>1&&<>
+          <button onClick={prev} style={{position:'absolute',left:-16,top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,.15)',border:'none',color:'#fff',borderRadius:8,padding:'10px 8px',cursor:'pointer',fontSize:20,zIndex:1}}>‹</button>
+          <button onClick={next} style={{position:'absolute',right:-16,top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,.15)',border:'none',color:'#fff',borderRadius:8,padding:'10px 8px',cursor:'pointer',fontSize:20,zIndex:1}}>›</button>
+        </>}
+        {item.type==='video'
+          ?<video src={item.url} controls autoPlay style={{maxWidth:'100%',maxHeight:'76vh',borderRadius:10}}/>
+          :<img src={item.url} alt={item.name} style={{maxWidth:'100%',maxHeight:'76vh',borderRadius:10,objectFit:'contain'}}/>
+        }
+        <div style={{color:'rgba(255,255,255,.5)',fontSize:12.5}}>{idx+1} / {media.length} · {item.name}</div>
+      </div>
+    </div>
+  );
+}
+
+// Media uploader
+function MediaUploader({media,onChange}) {
+  const ref = useRef();
+  const [lb,setLb] = useState(null);
+  const handle = useCallback(async files=>{
+    const arr=Array.from(files).filter(f=>f.type.startsWith('image/')||f.type.startsWith('video/'));
+    if(!arr.length) return;
+    const res=await Promise.all(arr.map(readFile));
+    onChange([...media,...res]);
+  },[media,onChange]);
+  return (
+    <div>
+      <input ref={ref} type="file" multiple accept="image/*,video/*" style={{display:'none'}} onChange={e=>handle(e.target.files)}/>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:4}}>
+        {media.map((m,i)=>(
+          <div key={m.id} style={{position:'relative',width:76,height:76,borderRadius:8,overflow:'hidden',cursor:'pointer',border:'1px solid #ece6d9'}} onClick={()=>setLb(i)}>
+            {m.type==='video'
+              ?<><video src={m.url} style={{width:'100%',height:'100%',objectFit:'cover'}}/><div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.35)',fontSize:20}}>▶</div></>
+              :<img src={m.url} alt={m.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+            }
+            <button onClick={e=>{e.stopPropagation();onChange(media.filter(x=>x.id!==m.id));}} style={{position:'absolute',top:3,right:3,background:'rgba(0,0,0,.6)',border:'none',color:'#fff',borderRadius:5,padding:'1px 5px',cursor:'pointer',fontSize:11}}>✕</button>
+          </div>
+        ))}
+        <div onClick={()=>ref.current.click()} style={{width:76,height:76,borderRadius:8,border:'1.5px dashed #e0d8c8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',background:'#fbf9f4',gap:4}}>
+          <span style={{fontSize:22}}>📷</span>
+          <span style={{fontSize:10.5,color:'#a89e8e',textAlign:'center',lineHeight:1.3}}>Add Photo/ Video</span>
+        </div>
+      </div>
+      {lb!==null&&<Lightbox media={media} startIdx={lb} onClose={()=>setLb(null)}/>}
+    </div>
+  );
+}
+
+// Main App
+function App() {
+  const [entries,setEntries] = useState(loadData);
+  const [search,setSearch]   = useState('');
+  const [typeF,setTypeF]     = useState('All');
+  const [statusF,setStatusF] = useState('All');
+  const [rentF,setRentF]     = useState('All');
+  const [showForm,setShowForm]= useState(false);
+  const [draft,setDraft]     = useState(null);
+  const [editId,setEditId]   = useState(null);
+  const [toast,setToast]     = useState(null);
+  const [lightbox,setLightbox]= useState(null);
+
+  useEffect(()=>{ saveData(entries); },[entries]);
+  useEffect(()=>{ if(!toast) return; const t=setTimeout(()=>setToast(null),2200); return()=>clearTimeout(t); },[toast]);
+
+  const rentBuckets = {
+    'All':()=>true,
+    'Under ₹15K':r=>r>0&&r<15000,
+    '₹15K–₹50K':r=>r>=15000&&r<=50000,
+    '₹50K–₹1L':r=>r>50000&&r<=100000,
+    'Above ₹1L':r=>r>100000,
+  };
+
+  const filtered = useMemo(()=>entries.filter(e=>{
+    const q=search.trim().toLowerCase();
+    return (!q||[e.title,e.location,e.notes,e.contact,e.contactName].join(' ').toLowerCase().includes(q))
+      &&(typeF==='All'||e.type===typeF)
+      &&(statusF==='All'||e.status===statusF)
+      &&rentBuckets[rentF](Number(e.rent)||0);
+  }),[entries,search,typeF,statusF,rentF]);
+
+  const counts = useMemo(()=>{
+    const c={total:entries.length,Available:0,Rented:0,'Charges Available':0};
+    entries.forEach(e=>{if(c[e.status]!==undefined)c[e.status]++;});
+    return c;
+  },[entries]);
+
+  const openNew  = ()=>{ setEditId(null); setDraft(newEntry()); setShowForm(true); };
+  const openEdit = e=>{ setEditId(e.id); setDraft({...e,media:[...(e.media||[])]}); setShowForm(true); };
+  const cancel   = ()=>{ setShowForm(false); setDraft(null); setEditId(null); };
+
+  const save = ()=>{
+    if(!draft.title.trim()){ setToast({err:true,msg:'Title bharo bhai!'}); return; }
+    const c={...draft,rent:Number(draft.rent)||0,deposit:Number(draft.deposit)||0,media:draft.media||[]};
+    if(editId){ setEntries(p=>p.map(e=>e.id===editId?c:e)); setToast({msg:'Update ho gaya ✓'}); }
+    else { setEntries(p=>[c,...p]); setToast({msg:'Listing add ho gayi ✓'}); }
+    cancel();
+  };
+
+  const del = id=>{ setEntries(p=>p.filter(e=>e.id!==id)); setToast({msg:'Delete ho gaya'}); };
+
+  const exportCSV = ()=>{
+    const h=['Type','Title','Location','Rent','Deposit','Area','Contact','Contact Name','Status','Notes','Media Count'];
+    const rows=filtered.map(e=>[e.type,e.title,e.location,e.rent,e.deposit,e.area,e.contact,e.contactName,e.status,e.notes,(e.media||[]).length]);
+    const csv=[h,...rows].map(r=>r.map(c=>{const s=String(c??'');return s.includes(',')||s.includes('"')?`"${s.replace(/"/g,'""')}"`:''+s;}).join(',')).join('\n');
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+    a.download=`ayodhya-properties-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setToast({msg:'CSV export ho gaya'});
+  };
+
+  const inp = {border:'1px solid #e7e1d4',borderRadius:8,padding:'9px 11px',fontSize:13.5,color:'#2b2620',outline:'none',width:'100%'};
+  const lbl = {fontSize:11,fontWeight:700,color:'#a89e8e',letterSpacing:'0.05em',textTransform:'uppercase',marginBottom:4,display:'block'};
+
+  return (
+    <div style={{minHeight:'100vh',background:'#f7f4ee',fontFamily:"'Inter',sans-serif"}}>
+
+      {/* Header */}
+      <header style={{background:'#2b2620',color:'#f7f4ee',padding:'24px 20px'}}>
+        <div style={{maxWidth:1100,margin:'0 auto',display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:14}}>
+          <div>
+            <div style={{fontSize:10.5,letterSpacing:'0.18em',fontWeight:700,color:'#c9a86a',marginBottom:5}}>AYODHYA · PROPERTY DESK</div>
+            <h1 style={{fontFamily:"'Fraunces',serif",fontSize:32,fontWeight:700,margin:0}}>Inventory</h1>
+            <p style={{margin:'5px 0 0',fontSize:13,color:'#bdb6a9'}}>{counts.total} listings · {counts.Available} available · {counts.Rented} rented out</p>
+          </div>
+          <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+            <button className="pi-btn" onClick={exportCSV} style={{display:'flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.08)',color:'#f7f4ee',border:'1px solid rgba(255,255,255,.15)',borderRadius:8,padding:'9px 15px',fontSize:13,fontWeight:600}}>⬇ Export CSV</button>
+            <button className="pi-btn" onClick={openNew}  style={{display:'flex',alignItems:'center',gap:6,background:'#c9a86a',color:'#2b2620',border:'none',borderRadius:8,padding:'9px 15px',fontSize:13,fontWeight:700}}>+ Add Listing</button>
+          </div>
+        </div>
+      </header>
+
+      <main style={{maxWidth:1100,margin:'0 auto',padding:'22px 18px 60px'}}>
+
+        {/* Search */}
+        <div style={{background:'#fff',border:'1px solid #e7e1d4',borderRadius:10,padding:'11px 14px',display:'flex',alignItems:'center',gap:10,marginBottom:12}}>
+          <span style={{fontSize:16}}>🔍</span>
+          <input style={{border:'none',outline:'none',fontSize:14,flex:1,color:'#2b2620',background:'transparent'}} placeholder="Search location, title, contact, notes…" value={search} onChange={e=>setSearch(e.target.value)}/>
+          {search&&<span onClick={()=>setSearch('')} style={{cursor:'pointer',fontSize:14,color:'#9a9286'}}>✕</span>}
+        </div>
+
+        {/* Type chips */}
+        <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:4,marginBottom:10}}>
+          {['All','House','Shop','Hotel','Commercial'].map(t=>(
+            <button key={t} className="chip" onClick={()=>setTypeF(t)} style={{display:'flex',alignItems:'center',gap:5,border:'1px solid '+(typeF===t?'#2b2620':'#e7e1d4'),background:typeF===t?'#2b2620':'#fff',color:typeF===t?'#f7f4ee':'#7a7368',borderRadius:999,padding:'7px 14px',fontSize:12.5,fontWeight:600,whiteSpace:'nowrap',flexShrink:0}}>
+              {t!=='All'&&TYPE_CONFIG[t]&&<span>{TYPE_CONFIG[t].emoji}</span>}{t}
+            </button>
+          ))}
+        </div>
+
+        {/* Filters */}
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:10}}>
+          <select style={{border:'1px solid #e7e1d4',background:'#fff',borderRadius:8,padding:'8px 12px',fontSize:13,color:'#54493d',cursor:'pointer'}} value={statusF} onChange={e=>setStatusF(e.target.value)}>
+            <option value="All">All Status</option>
+            {Object.entries(STATUS_CONFIG).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <select style={{border:'1px solid #e7e1d4',background:'#fff',borderRadius:8,padding:'8px 12px',fontSize:13,color:'#54493d',cursor:'pointer'}} value={rentF} onChange={e=>setRentF(e.target.value)}>
+            {Object.keys(rentBuckets).map(k=><option key={k} value={k}>{k==='All'?'All Rents':k}</option>)}
+          </select>
+        </div>
+
+        <div style={{fontSize:12.5,color:'#a89e8e',marginBottom:14,fontWeight:500}}>Showing {filtered.length} of {entries.length}</div>
+
+        {/* Cards grid */}
+        {filtered.length===0
+          ?<div style={{textAlign:'center',padding:'60px 20px'}}><div style={{fontSize:40}}>🏠</div><p style={{color:'#a89e8e',marginTop:10}}>Kuch nahi mila. Filters change karo.</p></div>
+          :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:14}}>
+            {filtered.map(entry=>{
+              const tc=TYPE_CONFIG[entry.type]||TYPE_CONFIG.House;
+              const sc=STATUS_CONFIG[entry.status]||STATUS_CONFIG.Available;
+              const media=entry.media||[];
+              return (
+                <div key={entry.id} className="pi-card" style={{background:'#fff',border:'1px solid #ece6d9',borderRadius:12,padding:16,display:'flex',flexDirection:'column',gap:10}}>
+
+                  {/* Media */}
+                  {media.length>0
+                    ?<div onClick={()=>setLightbox({entry,idx:0})} style={{position:'relative',borderRadius:10,overflow:'hidden',cursor:'pointer',height:130,background:'#f1ece1'}}>
+                        {media[0].type==='video'
+                          ?<><video src={media[0].url} style={{width:'100%',height:130,objectFit:'cover'}}/><div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.35)',fontSize:28}}>▶</div></>
+                          :<img src={media[0].url} alt="" style={{width:'100%',height:130,objectFit:'cover'}}/>
+                        }
+                        {media.length>1&&<div style={{position:'absolute',top:8,right:8,background:'rgba(0,0,0,.6)',color:'#fff',fontSize:11,fontWeight:700,borderRadius:6,padding:'3px 8px'}}>+{media.length-1}</div>}
+                        <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(transparent,rgba(0,0,0,.45))',color:'#fff',fontSize:11.5,fontWeight:600,padding:'16px 10px 7px'}}>📷 {media.filter(m=>m.type==='image').length} photos {media.filter(m=>m.type==='video').length>0&&`· 🎥 ${media.filter(m=>m.type==='video').length} videos`}</div>
+                      </div>
+                    :<div style={{height:90,borderRadius:10,background:'#f9f6f0',border:'1.5px dashed #e4ddd0',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:4}}>
+                        <span style={{fontSize:24}}>📷</span>
+                        <span style={{fontSize:11.5,color:'#c8c0b0'}}>No photos yet</span>
+                      </div>
+                  }
+
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:5,borderRadius:6,padding:'4px 9px',fontSize:11.5,fontWeight:700,background:tc.bg,color:tc.color}}>{tc.emoji} {entry.type}</div>
+                    <div style={{borderRadius:6,padding:'4px 9px',fontSize:11,fontWeight:600,background:sc.bg,color:sc.color}}>{sc.label}</div>
+                  </div>
+
+                  <h3 style={{fontFamily:"'Fraunces',serif",fontSize:16,fontWeight:600,lineHeight:1.35,color:'#2b2620'}}>{entry.title}</h3>
+
+                  {entry.location&&<div style={{display:'flex',alignItems:'flex-start',gap:5,fontSize:12.5,color:'#7a7368'}}>📍 {entry.location}</div>}
+                  {entry.area&&<div style={{fontSize:12,color:'#a89e8e'}}>📐 {entry.area}</div>}
+
+                  <div style={{paddingTop:8,borderTop:'1px solid #f1ece1'}}>
+                    <div style={{display:'flex',alignItems:'baseline',gap:3}}>
+                      <span style={{fontSize:19,fontWeight:700,color:'#2d5f4f',fontFamily:"'Fraunces',serif"}}>₹ {fmtRent(entry.rent)}</span>
+                      <span style={{fontSize:12,color:'#a89e8e'}}>/mo</span>
+                      {entry.deposit
